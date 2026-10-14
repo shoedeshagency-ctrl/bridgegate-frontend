@@ -81,19 +81,31 @@ function setupTOTP() {
 }
 setupTOTP();
 
-const adminSessions = new Map();
-const ADMIN_TTL     = 24 * 3600 * 1000;
+const ADMIN_TTL = 7 * 24 * 3600 * 1000; // 7 days
 
+// Stateless signed session — survives server restarts
+// Cookie value: "<expiry_ms>.<hmac_hex>"
+function _sessionSecret() {
+  // Use TOTP secret as signing key (always present after setupTOTP)
+  return crypto.createHash("sha256").update("admin-session:" + TOTP_SECRET_B32).digest();
+}
 function createAdminSession() {
-  const tok = crypto.randomBytes(32).toString("hex");
-  adminSessions.set(tok, Date.now() + ADMIN_TTL);
-  return tok;
+  const exp = String(Date.now() + ADMIN_TTL);
+  const mac = crypto.createHmac("sha256", _sessionSecret()).update(exp).digest("hex");
+  return exp + "." + mac;
 }
 function isAdminSession(tok) {
   if (!tok) return false;
-  const exp = adminSessions.get(tok);
-  if (!exp || Date.now() > exp) { adminSessions.delete(tok); return false; }
-  return true;
+  const dot = tok.lastIndexOf(".");
+  if (dot < 0) return false;
+  const exp = tok.slice(0, dot);
+  const mac = tok.slice(dot + 1);
+  const expected = crypto.createHmac("sha256", _sessionSecret()).update(exp).digest("hex");
+  // Constant-time compare
+  try {
+    if (!crypto.timingSafeEqual(Buffer.from(mac, "hex"), Buffer.from(expected, "hex"))) return false;
+  } catch { return false; }
+  return Date.now() < Number(exp);
 }
 function verifyTOTP(code) {
   if (!TOTP_INSTANCE) return false;
@@ -102,7 +114,7 @@ function verifyTOTP(code) {
 function adminAuth(req, res, next) {
   if (isAdminSession(req.cookies?.admin_tok)) return next();
   if (req.method !== "GET")
-    return res.status(401).json({ ok: false, error: "Session expired — log in at /admin" });
+    return res.status(401).json({ ok: false, error: "Session expired — log in at /admin/login" });
   res.redirect("/admin/login?next=" + encodeURIComponent(req.path));
 }
 
