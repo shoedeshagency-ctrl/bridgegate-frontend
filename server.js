@@ -4,8 +4,9 @@ const path = require("path");
 const crypto = require("crypto");
 
 const PORT = process.env.PORT || 3000;
-const API_BASE = process.env.API_BASE || ""; // e.g. https://bridgegate-api.onrender.com
-const API_KEY  = process.env.API_KEY  || ""; // the real secret — never sent to browser
+const API_BASE        = process.env.API_BASE        || "";
+const API_KEY         = process.env.API_KEY         || "";
+const INTERNAL_SECRET = process.env.INTERNAL_SECRET || "";
 
 const app = express();
 app.use(express.json({ limit: "50mb" }));
@@ -29,7 +30,10 @@ function makeSessionId() { return crypto.randomBytes(24).toString("hex"); }
 // Fetch a fresh single-use JWT from the backend using our secret API key
 async function fetchBackendToken() {
   const res = await fetch(`${API_BASE}/v1/auth/token`, {
-    headers: { "X-API-Key": API_KEY },
+    headers: {
+      "X-API-Key": API_KEY,
+      ...(INTERNAL_SECRET ? { "X-Internal-Secret": INTERNAL_SECRET } : {}),
+    },
     signal: AbortSignal.timeout(10000),
   });
   if (!res.ok) throw new Error(`Backend token fetch failed: ${res.status}`);
@@ -45,6 +49,7 @@ async function proxyToBackend(method, path, body) {
     headers: {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${token}`,
+      ...(INTERNAL_SECRET ? { "X-Internal-Secret": INTERNAL_SECRET } : {}),
     },
     signal: AbortSignal.timeout(35000),
   };
@@ -112,6 +117,7 @@ app.get("/proxy/models", requireSession, async (req, res) => {
   try {
     // /v1/models is public on the backend (no JWT needed), call directly
     const res2 = await fetch(`${API_BASE}/v1/models?type=${type}`, {
+      headers: INTERNAL_SECRET ? { "X-Internal-Secret": INTERNAL_SECRET } : {},
       signal: AbortSignal.timeout(15000),
     });
     const data = await res2.json();
