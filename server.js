@@ -341,6 +341,21 @@ app.post("/admin/api/accounts/toggle", adminAuth, async (req, res) => {
   } catch (e) { res.status(502).json({ ok: false, error: e.message }); }
 });
 
+// Per-account live credit check (or all if no email given)
+app.post("/admin/api/accounts/check", adminAuth, async (req, res) => {
+  try {
+    const { email } = req.body || {};
+    const r2 = await proxyToBackend("GET", "/v1/accounts");
+    const all = Array.isArray(r2.data) ? r2.data : [];
+    if (email) {
+      const entry = all.find(a => a.email === email);
+      if (!entry) return res.json({ ok: false, error: "Account not found" });
+      return res.json({ ok: true, account: entry });
+    }
+    res.json({ ok: true, accounts: all });
+  } catch (e) { res.status(502).json({ ok: false, error: e.message }); }
+});
+
 app.get("/admin/api/export", adminAuth, async (req, res) => {
   try {
     const { status, data } = await backendAdmin("GET", "/admin/accounts/export");
@@ -481,6 +496,7 @@ input:focus{border-color:var(--accent)}
 <header>
   <h1>Bridgegate Admin</h1>
   <div class="actions">
+    <button class="btn btn-sm" id="refresh-btn" onclick="refreshAllAccounts()">Refresh Accounts</button>
     <button class="btn btn-green btn-sm" onclick="syncToRender()" id="sync-btn">Sync to Render</button>
     <button class="btn btn-sm" onclick="location.href='/usage'">Usage Log</button>
     <button class="btn btn-danger btn-sm" onclick="doLogout()">Logout</button>
@@ -580,6 +596,7 @@ async function loadAccounts() {
       <div class="card-meta">\${exp}</div>
       <div class="card-credits">Credits: <span>\${a.credits ?? '—'}</span></div>
       <div class="card-btns">
+        <button class="btn btn-sm" onclick="checkAccount('\${a.email}')">Check</button>
         <button class="btn btn-sm \${isActive ? 'btn-danger' : 'btn-green'}" onclick="toggleAccount('\${a.email}',\${isActive})">
           \${isActive ? 'Disable' : 'Enable'}
         </button>
@@ -614,6 +631,30 @@ async function toggleAccount(email, isActive) {
   const r = await api('POST', '/admin/api/accounts/toggle', { email, active: !isActive });
   if (r.ok) { toast((isActive ? 'Disabled' : 'Enabled') + ': ' + email); loadAccounts(); }
   else { toast('Toggle not supported by backend (add POST /admin/accounts/toggle)', 'err'); }
+}
+
+async function checkAccount(email) {
+  toast('Checking ' + email + '…');
+  const r = await api('POST', '/admin/api/accounts/check', { email });
+  if (r.ok && r.account) {
+    const a = r.account;
+    const credits = a.credits ?? 'error';
+    const exp = a.token_expires_at ? new Date(a.token_expires_at).toLocaleTimeString() : 'n/a';
+    const status = a.error ? 'ERROR: ' + a.error : (a.active !== false ? 'active' : 'inactive');
+    toast(email + ' — credits: ' + credits + ' · status: ' + status + ' · token exp: ' + exp, a.error ? 'err' : 'ok');
+    loadAccounts();
+  } else {
+    toast('Check failed: ' + (r.error || 'unknown'), 'err');
+  }
+}
+
+async function refreshAllAccounts() {
+  const btn = document.getElementById('refresh-btn');
+  btn.textContent = 'Refreshing…'; btn.disabled = true;
+  const r = await api('POST', '/admin/api/accounts/check', {});
+  btn.textContent = 'Refresh Accounts'; btn.disabled = false;
+  if (r.ok) { toast('Refreshed ' + (r.accounts || []).length + ' accounts'); loadAccounts(); }
+  else toast('Refresh failed: ' + r.error, 'err');
 }
 
 // ── Export ──────────────────────────────────────────────────────────────────
