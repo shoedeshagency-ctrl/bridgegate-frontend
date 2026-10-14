@@ -326,8 +326,15 @@ app.get("/admin/api/accounts", adminAuth, async (req, res) => {
     } catch {}
     // Merge live credits into export data
     const accounts = (data.accounts || []).map(a => {
-      const liveEntry = live.find(l => l.email === a.email);
-      return { ...a, credits: liveEntry?.credits ?? null, token_expires_at: liveEntry?.token_expires_at ?? null };
+      const l = live.find(l => l.email === a.email);
+      return { ...a,
+        credits:          l?.credits          ?? null,
+        credits_limit:    l?.credits_limit    ?? null,
+        credits_used:     l?.credits_used     ?? null,
+        plan:             l?.plan             ?? null,
+        status:           l?.status           ?? null,
+        token_expires_at: l?.token_expires_at ?? null,
+      };
     });
     res.status(status).json({ accounts });
   } catch (e) { res.status(502).json({ ok: false, error: e.message }); }
@@ -609,7 +616,9 @@ async function loadAccounts() {
       </div>
       <div class="card-email">\${a.email}</div>
       <div class="card-meta">\${exp}</div>
-      <div class="card-credits">Credits: <span>\${a.credits ?? '—'}</span></div>
+      <div class="card-credits">Plan: <span>\${a.plan ?? '—'}</span> &nbsp;·&nbsp; Status: <span>\${a.status ?? '—'}</span></div>
+      <div class="card-credits">Remaining: <span>\${a.credits ?? '—'}</span> &nbsp;/&nbsp; Limit: <span>\${a.credits_limit ?? '—'}</span></div>
+      <div class="card-credits" style="font-size:11px;color:var(--muted)">Used: \${a.credits_used ?? '—'}</div>
       <div class="card-btns">
         <button class="btn btn-sm" onclick="checkAccount('\${a.email}')">Check</button>
         <button class="btn btn-sm \${isActive ? 'btn-danger' : 'btn-green'}" onclick="toggleAccount('\${a.email}',\${isActive})">
@@ -653,10 +662,13 @@ async function checkAccount(email) {
   const r = await api('POST', '/admin/api/accounts/check', { email });
   if (r.ok && r.account) {
     const a = r.account;
-    const credits = a.credits ?? 'error';
-    const exp = a.token_expires_at ? new Date(a.token_expires_at).toLocaleTimeString() : 'n/a';
-    const status = a.error ? 'ERROR: ' + a.error : (a.active !== false ? 'active' : 'inactive');
-    toast(email + ' — credits: ' + credits + ' · status: ' + status + ' · token exp: ' + exp, a.error ? 'err' : 'ok');
+    if (a.error) { toast(email + ' — ERROR: ' + a.error, 'err'); return; }
+    const remaining = a.credits ?? '?';
+    const limit     = a.credits_limit ?? '?';
+    const used      = a.credits_used ?? '?';
+    const plan      = a.plan ?? '?';
+    const status    = a.status ?? '?';
+    toast(\`\${plan} | \${status} | Remaining=\${remaining} Limit=\${limit} Used=\${used}\`, 'ok');
     loadAccounts();
   } else {
     toast('Check failed: ' + (r.error || 'unknown'), 'err');
