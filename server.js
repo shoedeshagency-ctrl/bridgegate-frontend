@@ -274,6 +274,7 @@ app.get("/usage", (req, res) => {
 
 // ── Admin login ───────────────────────────────────────────────────────────────
 app.get("/admin/login", (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   const next = req.query.next || "/admin";
   res.send(`<!DOCTYPE html><html><head><title>Bridgegate Admin</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -439,6 +440,8 @@ app.post("/admin/api/sync", adminAuth, async (req, res) => {
 
 // ── Admin panel HTML ──────────────────────────────────────────────────────────
 app.get("/admin", adminAuth, (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
   res.send(`<!DOCTYPE html>
 <html><head>
 <title>Bridgegate Admin</title>
