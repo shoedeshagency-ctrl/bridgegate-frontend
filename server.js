@@ -343,6 +343,7 @@ app.get("/admin/api/accounts", adminAuth, async (req, res) => {
 app.post("/admin/api/accounts/add", adminAuth, async (req, res) => {
   try {
     const { status, data } = await backendAdmin("POST", "/admin/accounts/add", req.body);
+    if (data.ok) autoSync();
     res.status(status).json(data);
   } catch (e) { res.status(502).json({ ok: false, error: e.message }); }
 });
@@ -350,6 +351,7 @@ app.post("/admin/api/accounts/add", adminAuth, async (req, res) => {
 app.post("/admin/api/accounts/remove", adminAuth, async (req, res) => {
   try {
     const { status, data } = await backendAdmin("POST", "/admin/accounts/remove", req.body);
+    if (data.ok) autoSync();
     res.status(status).json(data);
   } catch (e) { res.status(502).json({ ok: false, error: e.message }); }
 });
@@ -357,6 +359,7 @@ app.post("/admin/api/accounts/remove", adminAuth, async (req, res) => {
 app.post("/admin/api/accounts/toggle", adminAuth, async (req, res) => {
   try {
     const { status, data } = await backendAdmin("POST", "/admin/accounts/toggle", req.body);
+    if (data.ok) autoSync();
     res.status(status).json(data);
   } catch (e) { res.status(502).json({ ok: false, error: e.message }); }
 });
@@ -417,6 +420,26 @@ app.post("/admin/api/devkeys/generate", adminAuth, (req, res) => {
   devKeys.add(key);
   res.json({ ok: true, key, keys: [...devKeys] });
 });
+
+// Auto-sync helper — called after any account mutation
+async function autoSync() {
+  if (!RENDER_API_KEY || !RENDER_SVC_ID) return;
+  try {
+    const { data: exportData } = await backendAdmin("GET", "/admin/accounts/export");
+    const accountsJson = JSON.stringify(exportData.accounts || []);
+    const listRes = await fetch(`https://api.render.com/v1/services/${RENDER_SVC_ID}/env-vars`, {
+      headers: { "Authorization": `Bearer ${RENDER_API_KEY}` },
+    });
+    const existing = await listRes.json();
+    const envVars = (existing || []).map(e => e.envVar || e).filter(e => e.key && e.key !== "ACCOUNTS_JSON");
+    envVars.push({ key: "ACCOUNTS_JSON", value: accountsJson });
+    await fetch(`https://api.render.com/v1/services/${RENDER_SVC_ID}/env-vars`, {
+      method: "PUT",
+      headers: { "Authorization": `Bearer ${RENDER_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify(envVars),
+    });
+  } catch (e) { console.error("[autoSync] failed:", e.message); }
+}
 
 // Sync ACCOUNTS_JSON to Render env var
 app.post("/admin/api/sync", adminAuth, async (req, res) => {
