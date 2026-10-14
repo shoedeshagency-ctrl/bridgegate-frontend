@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: bridgegate-frontend
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: NODE_ENV
+        value: production
+      - key: API_BASE
+        sync: false
+      - key: API_KEY
+        sync: false
