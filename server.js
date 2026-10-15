@@ -343,7 +343,6 @@ app.get("/admin/api/accounts", adminAuth, async (req, res) => {
 app.post("/admin/api/accounts/add", adminAuth, async (req, res) => {
   try {
     const { status, data } = await backendAdmin("POST", "/admin/accounts/add", req.body);
-    if (data.ok) autoSync();
     res.status(status).json(data);
   } catch (e) { res.status(502).json({ ok: false, error: e.message }); }
 });
@@ -351,7 +350,6 @@ app.post("/admin/api/accounts/add", adminAuth, async (req, res) => {
 app.post("/admin/api/accounts/remove", adminAuth, async (req, res) => {
   try {
     const { status, data } = await backendAdmin("POST", "/admin/accounts/remove", req.body);
-    if (data.ok) autoSync();
     res.status(status).json(data);
   } catch (e) { res.status(502).json({ ok: false, error: e.message }); }
 });
@@ -359,7 +357,6 @@ app.post("/admin/api/accounts/remove", adminAuth, async (req, res) => {
 app.post("/admin/api/accounts/toggle", adminAuth, async (req, res) => {
   try {
     const { status, data } = await backendAdmin("POST", "/admin/accounts/toggle", req.body);
-    if (data.ok) autoSync();
     res.status(status).json(data);
   } catch (e) { res.status(502).json({ ok: false, error: e.message }); }
 });
